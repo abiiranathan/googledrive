@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google Drive Manager</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #1943ff 0%, #0ce938 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            color: #667eea;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .stats {
+            display: flex;
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .stat-card {
+            flex: 1;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .tab {
+            background: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 600;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .tab:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        .tab.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .content {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            min-height: 500px;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .search-box {
+            flex: 1;
+            padding: 12px 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: border-color 0.3s;
+        }
+
+        .search-box:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        .btn-danger {
+            background: #ff4757;
+            color: white;
+        }
+
+        .btn-success {
+            background: #2ed573;
+            color: white;
+        }
+
+        .file-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .file-card {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            transition: all 0.3s;
+            border: 2px solid transparent;
+        }
+
+        .file-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+            border-color: #667eea;
+        }
+
+        .file-icon {
+            font-size: 3em;
+            text-align: center;
+            margin-bottom: 15px;
+        }
+
+        .file-name {
+            font-weight: 600;
+            font-size: 1.1em;
+            margin-bottom: 10px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .file-meta {
+            color: #666;
+            font-size: 0.9em;
+            margin-bottom: 15px;
+        }
+
+        .file-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .file-actions .btn {
+            flex: 1;
+            padding: 8px;
+            font-size: 0.9em;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 50px;
+            font-size: 1.2em;
+            color: #666;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .bookmark-list {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .bookmark-item {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s;
+        }
+
+        .bookmark-item:hover {
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .bookmark-info {
+            flex: 1;
+        }
+
+        .bookmark-name {
+            font-weight: 600;
+            font-size: 1.1em;
+            margin-bottom: 5px;
+        }
+
+        .bookmark-notes {
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .bookmark-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        .modal-title {
+            font-size: 1.5em;
+            margin-bottom: 20px;
+            color: #667eea;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1em;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 50px;
+            color: #999;
+        }
+
+        .empty-state-icon {
+            font-size: 5em;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>📁 RISTAL E-LIBRARY</h1>
+            <div class="stats">
+                <div class="stat-card">
+                    <div class="stat-value" id="totalFiles">0</div>
+                    <div class="stat-label">Total Files</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="totalBookmarks">0</div>
+                    <div class="stat-label">Bookmarks</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="totalDownloads">0</div>
+                    <div class="stat-label">Downloads</div>
+                </div>
+            </div>
+        </header>
+
+        <div class="tabs">
+            <button class="tab active" data-tab="files">All Files</button>
+            <button class="tab" data-tab="bookmarks">Bookmarks</button>
+            <button class="tab" data-tab="stats">Statistics</button>
+        </div>
+
+        <div class="content">
+            <!-- Files Tab -->
+            <div class="tab-content active" id="files-tab">
+                <div class="controls">
+                    <input type="text" class="search-box" id="searchBox" placeholder="Search files...">
+                    <button class="btn btn-primary" onclick="refreshFiles()">🔄 Refresh</button>
+                </div>
+                <div id="filesContainer">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        Loading files...
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bookmarks Tab -->
+            <div class="tab-content" id="bookmarks-tab">
+                <div id="bookmarksContainer">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        Loading bookmarks...
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stats Tab -->
+            <div class="tab-content" id="stats-tab">
+                <h2 style="margin-bottom: 20px;">Download Statistics</h2>
+                <div id="statsContainer">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        Loading statistics...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bookmark Modal -->
+    <div class="modal" id="bookmarkModal">
+        <div class="modal-content">
+            <h2 class="modal-title">Add Bookmark</h2>
+            <div class="form-group">
+                <label class="form-label">File</label>
+                <input type="text" class="form-input" id="bookmarkFileName" readonly>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Notes (optional)</label>
+                <input type="text" class="form-input" id="bookmarkNotes" placeholder="Add notes...">
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeBookmarkModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="saveBookmark()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let allFiles = [];
+        let currentBookmarkFile = null;
+
+        // Tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const tabName = tab.dataset.tab;
+
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+                tab.classList.add('active');
+                document.getElementById(`${tabName}-tab`).classList.add('active');
+
+                if (tabName === 'bookmarks') loadBookmarks();
+                if (tabName === 'stats') loadStats();
+            });
+        });
+
+        // Search functionality
+        document.getElementById('searchBox').addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase();
+            const filtered = allFiles.filter(file =>
+                file.Name.toLowerCase().includes(query) ||
+                file.MimeType.toLowerCase().includes(query)
+            );
+            renderFiles(filtered);
+        });
+
+        // Load files
+        async function loadFiles(refresh = false) {
+            try {
+                const url = `/api/files${refresh ? '?refresh=true' : ''}`;
+                const response = await fetch(url);
+                const data = await response.json();
+                allFiles = data.files || [];
+
+                document.getElementById('totalFiles').textContent = allFiles.length;
+                renderFiles(allFiles);
+            } catch (error) {
+                console.error('Error loading files:', error);
+                document.getElementById('filesContainer').innerHTML =
+                    '<div class="empty-state"><div class="empty-state-icon">❌</div><p>Failed to load files</p></div>';
+            }
+        }
+
+        function renderFiles(files) {
+            const container = document.getElementById('filesContainer');
+
+            if (files.length === 0) {
+                container.innerHTML =
+                    '<div class="empty-state"><div class="empty-state-icon">📂</div><p>No files found</p></div>';
+                return;
+            }
+
+            const html = `
+                <div class="file-grid">
+                    ${files.map(file => `
+                        <div class="file-card">
+                            <div class="file-icon">${getFileIcon(file.MimeType)}</div>
+                            <div class="file-name" title="${file.Name}">${file.Name}</div>
+                            <div class="file-meta">
+                                ${formatBytes(file.Size)} • ${file.MimeType.split('/').pop()}
+                            </div>
+                            <div class="file-actions">
+                                <button class="btn btn-primary" onclick="downloadFile('${file.ID}', '${escapeHtml(file.Name)}')">
+                                    ⬇ Download
+                                </button>
+                                <button class="btn btn-success" onclick="openBookmarkModal('${file.ID}', '${escapeHtml(file.Name)}')">
+                                    ⭐ Bookmark
+                                </button>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+            container.innerHTML = html;
+        }
+
+        function getFileIcon(mimeType) {
+            if (mimeType.includes('image')) return '🖼️';
+            if (mimeType.includes('video')) return '🎥';
+            if (mimeType.includes('audio')) return '🎵';
+            if (mimeType.includes('pdf')) return '📄';
+            if (mimeType.includes('zip') || mimeType.includes('compressed')) return '📦';
+            if (mimeType.includes('text')) return '📝';
+            if (mimeType.includes('spreadsheet') || mimeType.includes('excel')) return '📊';
+            if (mimeType.includes('presentation')) return '📽️';
+            return '📄';
+        }
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        }
+
+        function escapeHtml(text) {
+            return text.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        }
+
+        async function downloadFile(fileId, fileName) {
+            const url = `/api/files/${fileId}/download?name=${encodeURIComponent(fileName)}`;
+            window.open(url, '_blank');
+        }
+
+        function refreshFiles() {
+            document.getElementById('filesContainer').innerHTML =
+                '<div class="loading"><div class="spinner"></div>Refreshing files...</div>';
+            loadFiles(true);
+        }
+
+        // Bookmark functions
+        function openBookmarkModal(fileId, fileName) {
+            currentBookmarkFile = { id: fileId, name: fileName };
+            document.getElementById('bookmarkFileName').value = fileName;
+            document.getElementById('bookmarkNotes').value = '';
+            document.getElementById('bookmarkModal').classList.add('active');
+        }
+
+        function closeBookmarkModal() {
+            document.getElementById('bookmarkModal').classList.remove('active');
+            currentBookmarkFile = null;
+        }
+
+        async function saveBookmark() {
+            if (!currentBookmarkFile) return;
+
+            const notes = document.getElementById('bookmarkNotes').value;
+
+            try {
+                const response = await fetch('/api/bookmarks', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        file_id: currentBookmarkFile.id,
+                        notes: notes
+                    })
+                });
+
+                if (response.ok) {
+                    closeBookmarkModal();
+                    alert('Bookmark added successfully!');
+                    loadBookmarks();
+                } else {
+                    alert('Failed to add bookmark');
+                }
+            } catch (error) {
+                console.error('Error saving bookmark:', error);
+                alert('Failed to add bookmark');
+            }
+        }
+
+        async function loadBookmarks() {
+            try {
+                const response = await fetch('/api/bookmarks');
+                const data = await response.json();
+                const bookmarks = data.bookmarks || [];
+
+                document.getElementById('totalBookmarks').textContent = bookmarks.length;
+                renderBookmarks(bookmarks);
+            } catch (error) {
+                console.error('Error loading bookmarks:', error);
+            }
+        }
+
+        function renderBookmarks(bookmarks) {
+            const container = document.getElementById('bookmarksContainer');
+
+            if (bookmarks.length === 0) {
+                container.innerHTML =
+                    '<div class="empty-state"><div class="empty-state-icon">⭐</div><p>No bookmarks yet</p></div>';
+                return;
+            }
+
+            const html = `
+                <div class="bookmark-list">
+                    ${bookmarks.map(bookmark => `
+                        <div class="bookmark-item">
+                            <div class="bookmark-info">
+                                <div class="bookmark-name">${bookmark.file_name}</div>
+                                <div class="bookmark-notes">${bookmark.notes || 'No notes'}</div>
+                            </div>
+                            <div class="bookmark-actions">
+                                <button class="btn btn-primary" onclick="downloadFile('${bookmark.file_id}', '${escapeHtml(bookmark.file_name)}')">
+                                    ⬇ Download
+                                </button>
+                                <button class="btn btn-danger" onclick="deleteBookmark(${bookmark.id})">
+                                    🗑️ Delete
+                                </button>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+            container.innerHTML = html;
+        }
+
+        async function deleteBookmark(id) {
+            if (!confirm('Delete this bookmark?')) return;
+
+            try {
+                const response = await fetch(`/api/bookmarks/${id}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    loadBookmarks();
+                } else {
+                    alert('Failed to delete bookmark');
+                }
+            } catch (error) {
+                console.error('Error deleting bookmark:', error);
+                alert('Failed to delete bookmark');
+            }
+        }
+
+        async function loadStats() {
+            try {
+                const response = await fetch('/api/stats');
+                const data = await response.json();
+
+                document.getElementById('totalDownloads').textContent = data.total_downloads;
+                renderStats(data);
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+
+        function renderStats(data) {
+            const container = document.getElementById('statsContainer');
+
+            if (!data.top_files || data.top_files.length === 0) {
+                container.innerHTML =
+                    '<div class="empty-state"><div class="empty-state-icon">📊</div><p>No download history yet</p></div>';
+                return;
+            }
+
+            const html = `
+                <h3 style="margin-bottom: 15px;">Top Downloaded Files</h3>
+                <div class="bookmark-list">
+                    ${data.top_files.map((file, index) => `
+                        <div class="bookmark-item">
+                            <div class="bookmark-info">
+                                <div class="bookmark-name">#${index + 1} ${file.file_name}</div>
+                                <div class="bookmark-notes">${file.count} downloads</div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+            container.innerHTML = html;
+        }
+
+        // Initialize
+        loadFiles();
+        loadBookmarks();
+        loadStats();
+    </script>
+</body>
+
+</html>

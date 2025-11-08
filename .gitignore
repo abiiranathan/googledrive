@@ -1,0 +1,6 @@
+.env
+bin/
+credentials.json
+access-token.json
+*.db
+*.sqlite3
