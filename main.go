@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -24,15 +23,14 @@ import (
 const (
 	// DefaultCredentialsPath is the path to the OAuth2 credentials file.
 	DefaultCredentialsPath = "credentials.json"
-
 	// DefaultDBPath is the path to the SQLite database.
 	DefaultDBPath = "gdrive.db"
-
-	// CacheExpiration is the duration for which cached data is valid.
-	CacheExpiration = 5 * time.Minute
-
+	// CacheExpiration is the duration for which cached data is valid (24 hours for e-library).
+	CacheExpiration = 24 * time.Hour
 	// FilesListCacheKey is the Redis key for cached file list.
 	FilesListCacheKey = "gdrive:files:list"
+	// CacheTimestampKey is the Redis key for cache timestamp.
+	CacheTimestampKey = "gdrive:files:timestamp"
 )
 
 // Server represents the web application server.
@@ -40,9 +38,6 @@ type Server struct {
 	driveClient *gdrive.DriveClient
 	db          *sql.DB
 	redis       *redis.Client
-	mu          sync.RWMutex // protects in-memory cache fallback
-	fileCache   []gdrive.FileInfo
-	cacheTime   time.Time
 }
 
 // BookmarkRequest represents a bookmark creation request.
@@ -76,26 +71,27 @@ func NewServer(ctx context.Context, credentialsPath, dbPath string, redisAddr st
 		return nil, fmt.Errorf("unable to initialize database: %w", err)
 	}
 
-	// Initialize Redis client (optional)
-	var redisClient *redis.Client
-	if redisAddr != "" {
-		redisClient = redis.NewClient(&redis.Options{
-			Addr: redisAddr,
-			DB:   0,
-		})
-
-		// Test connection
-		if err := redisClient.Ping(ctx).Err(); err != nil {
-			log.Printf("Warning: Redis connection failed, using in-memory cache: %v", err)
-			redisClient = nil
-		}
+	// Initialize Redis client (required for e-library caching)
+	if redisAddr == "" {
+		return nil, fmt.Errorf("Redis address is required for e-library operation")
 	}
+
+	redisClient := redis.NewClient(&redis.Options{
+		Addr: redisAddr,
+		DB:   0,
+	})
+
+	// Test connection
+	if err := redisClient.Ping(ctx).Err(); err != nil {
+		return nil, fmt.Errorf("Redis connection failed: %w", err)
+	}
+
+	log.Println("Redis connected successfully - using 24-hour cache for e-library")
 
 	return &Server{
 		driveClient: driveClient,
 		db:          db,
 		redis:       redisClient,
-		fileCache:   []gdrive.FileInfo{},
 	}, nil
 }
 
@@ -133,49 +129,58 @@ func (s *Server) Close() error {
 	return s.db.Close()
 }
 
-// getFiles retrieves files from cache or Drive API.
+// getFiles retrieves files from Redis cache or Drive API.
 // Returns cached data if available and not expired, otherwise fetches fresh data.
+// For e-library use case, cache is valid for 24 hours.
 func (s *Server) getFiles(ctx context.Context, forceRefresh bool) ([]gdrive.FileInfo, error) {
-	// Try Redis cache first
-	if s.redis != nil && !forceRefresh {
+	// Try Redis cache first (unless force refresh)
+	if !forceRefresh {
 		data, err := s.redis.Get(ctx, FilesListCacheKey).Bytes()
 		if err == nil {
 			var files []gdrive.FileInfo
 			if err := json.Unmarshal(data, &files); err == nil {
-				return files, nil
+				// Verify cache age
+				timestamp, err := s.redis.Get(ctx, CacheTimestampKey).Int64()
+				if err == nil {
+					cacheAge := time.Since(time.Unix(timestamp, 0))
+					if cacheAge < CacheExpiration {
+						log.Printf("Serving from cache (age: %v, expires in: %v)",
+							cacheAge.Round(time.Minute),
+							(CacheExpiration - cacheAge).Round(time.Minute))
+						return files, nil
+					}
+					log.Println("Cache expired, fetching fresh data from Google Drive")
+				}
 			}
 		}
-	}
-
-	// Try in-memory cache fallback
-	if !forceRefresh {
-		s.mu.RLock()
-		if time.Since(s.cacheTime) < CacheExpiration && len(s.fileCache) > 0 {
-			files := make([]gdrive.FileInfo, len(s.fileCache))
-			copy(files, s.fileCache)
-			s.mu.RUnlock()
-			return files, nil
-		}
-		s.mu.RUnlock()
+	} else {
+		log.Println("Force refresh requested, fetching fresh data from Google Drive")
 	}
 
 	// Fetch from Drive API
+	log.Println("Fetching files from Google Drive API...")
 	files, err := s.driveClient.ListFiles(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("unable to list files: %w", err)
 	}
 
-	// Update caches
-	if data, err := json.Marshal(files); err == nil {
-		if s.redis != nil {
-			s.redis.Set(ctx, FilesListCacheKey, data, CacheExpiration)
-		}
-	}
+	log.Printf("Fetched %d files from Google Drive", len(files))
 
-	s.mu.Lock()
-	s.fileCache = files
-	s.cacheTime = time.Now()
-	s.mu.Unlock()
+	// Update Redis cache with 24-hour expiration
+	data, err := json.Marshal(files)
+	if err != nil {
+		log.Printf("Warning: Failed to marshal files for caching: %v", err)
+	} else {
+		// Store files list
+		if err := s.redis.Set(ctx, FilesListCacheKey, data, CacheExpiration).Err(); err != nil {
+			log.Printf("Warning: Failed to cache files list: %v", err)
+		}
+		// Store timestamp for cache age tracking
+		if err := s.redis.Set(ctx, CacheTimestampKey, time.Now().Unix(), CacheExpiration).Err(); err != nil {
+			log.Printf("Warning: Failed to cache timestamp: %v", err)
+		}
+		log.Println("Files cached in Redis for 24 hours")
+	}
 
 	return files, nil
 }
@@ -190,10 +195,18 @@ func (s *Server) handleListFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get cache info for response metadata
+	timestamp, _ := s.redis.Get(r.Context(), CacheTimestampKey).Int64()
+	cacheAge := time.Since(time.Unix(timestamp, 0))
+	expiresIn := CacheExpiration - cacheAge
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
-		"files": files,
-		"count": len(files),
+		"files":      files,
+		"count":      len(files),
+		"cache_age":  cacheAge.Round(time.Minute).String(),
+		"expires_in": expiresIn.Round(time.Minute).String(),
+		"cached_at":  time.Unix(timestamp, 0).Format(time.RFC3339),
 	})
 }
 
@@ -391,6 +404,23 @@ func (s *Server) handleGetStats(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleClearCache handles POST /api/cache/clear - manually clears the Redis cache.
+func (s *Server) handleClearCache(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Delete cache keys
+	if err := s.redis.Del(ctx, FilesListCacheKey, CacheTimestampKey).Err(); err != nil {
+		http.Error(w, fmt.Sprintf("failed to clear cache: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	log.Println("Cache cleared manually")
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "cache cleared successfully",
+	})
+}
+
 func main() {
 	godotenv.Load()
 
@@ -407,7 +437,10 @@ func main() {
 		dbPath = DefaultDBPath
 	}
 
-	redisAddr := os.Getenv("REDIS_ADDR") // e.g., "localhost:6379"
+	redisAddr := os.Getenv("REDIS_ADDR")
+	if redisAddr == "" {
+		log.Fatal("REDIS_ADDR environment variable is required for e-library operation")
+	}
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -444,6 +477,7 @@ func main() {
 		r.Post("/bookmarks", server.handleAddBookmark)
 		r.Delete("/bookmarks/{id}", server.handleDeleteBookmark)
 		r.Get("/stats", server.handleGetStats)
+		r.Post("/cache/clear", server.handleClearCache)
 	})
 
 	// Serve static files (frontend)
@@ -451,7 +485,8 @@ func main() {
 		http.ServeFile(w, r, "static/index.html")
 	})
 
-	log.Printf("Server starting on http://localhost:%s", port)
+	log.Printf("E-Library server starting on http://localhost:%s", port)
+	log.Printf("Cache strategy: Redis with 24-hour expiration")
 	if err := http.ListenAndServe(":"+port, r); err != nil {
 		log.Fatalf("Server failed: %v", err)
 	}
