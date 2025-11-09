@@ -23,12 +23,16 @@ import (
 const (
 	// DefaultCredentialsPath is the path to the OAuth2 credentials file.
 	DefaultCredentialsPath = "credentials.json"
+
 	// DefaultDBPath is the path to the SQLite database.
 	DefaultDBPath = "gdrive.db"
+	
 	// CacheExpiration is the duration for which cached data is valid (24 hours for e-library).
 	CacheExpiration = 24 * time.Hour
+	
 	// FilesListCacheKey is the Redis key for cached file list.
 	FilesListCacheKey = "gdrive:files:list"
+	
 	// CacheTimestampKey is the Redis key for cache timestamp.
 	CacheTimestampKey = "gdrive:files:timestamp"
 )
@@ -288,7 +292,7 @@ func (s *Server) handleAddBookmark(w http.ResponseWriter, r *http.Request) {
 
 	id, _ := result.LastInsertId()
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	json.NewEncoder(w).Encode(map[string]any{
 		"id":      id,
 		"message": "bookmark added",
 	})
