@@ -2,5 +2,6 @@
 bin/
 credentials.json
 access-token.json
+*.json
 *.db
 *.sqlite3

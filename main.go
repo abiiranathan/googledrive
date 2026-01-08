@@ -5,12 +5,13 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"gdrive/gdrive"
 	"log"
 	"net/http"
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/abiiranathan/gdrive"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -26,13 +27,13 @@ const (
 
 	// DefaultDBPath is the path to the SQLite database.
 	DefaultDBPath = "gdrive.db"
-	
+
 	// CacheExpiration is the duration for which cached data is valid (24 hours for e-library).
 	CacheExpiration = 24 * time.Hour
-	
+
 	// FilesListCacheKey is the Redis key for cached file list.
 	FilesListCacheKey = "gdrive:files:list"
-	
+
 	// CacheTimestampKey is the Redis key for cache timestamp.
 	CacheTimestampKey = "gdrive:files:timestamp"
 )
